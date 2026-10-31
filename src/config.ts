@@ -84,3 +84,59 @@ export function loadConfig(): SpendGuardConfig {
   loadDotEnv();
   return parseConfig(process.env);
 }
+
+/**
+ * Executor configuration: everything the base config has, plus what the
+ * live executor needs — the guard contract's account id and the agent's
+ * SCOPED function-call private key (the only key the agent process holds;
+ * the full-access key is never used by the executor).
+ */
+export interface ExecutorConfig extends SpendGuardConfig {
+  guardContractId: string;
+  /** Function-call access key secret, `ed25519:...` form. Never log this. */
+  scopedPrivateKey: string;
+}
+
+const IMPLICIT_ACCOUNT_RE = /^[0-9a-f]{64}$/;
+
+/**
+ * Default guard contract id: `guard.<agent account>` — a subaccount only
+ * exists under a NAMED account, so for an implicit (64-hex) agent account
+ * there is no derivable default and null is returned.
+ */
+export function defaultGuardContractId(accountId: string): string | null {
+  return IMPLICIT_ACCOUNT_RE.test(accountId) ? null : `guard.${accountId}`;
+}
+
+/** Parse + validate executor configuration from an environment map. Pure and offline-testable. */
+export function parseExecutorConfig(env: NodeJS.ProcessEnv): ExecutorConfig {
+  const base = parseConfig(env);
+
+  const scopedPrivateKey = (env.NEAR_SCOPED_PRIVATE_KEY ?? "").trim();
+  if (!scopedPrivateKey) {
+    throw new CredentialsNotConfiguredError(["NEAR_SCOPED_PRIVATE_KEY"]);
+  }
+  if (!scopedPrivateKey.startsWith("ed25519:")) {
+    throw new Error(
+      "NEAR_SCOPED_PRIVATE_KEY must be in ed25519:... form (the scoped key printed once by `npm run deploy:guard`). Refusing to continue.",
+    );
+  }
+
+  const guardContractId =
+    (env.NEAR_GUARD_CONTRACT_ID ?? "").trim() || defaultGuardContractId(base.accountId);
+  if (!guardContractId) {
+    throw new Error(
+      "NEAR_GUARD_CONTRACT_ID is not set, and no default can be derived: the agent account " +
+        `${base.accountId} is an implicit (hex) account, which cannot own a guard.<account> subaccount. ` +
+        "Set NEAR_GUARD_CONTRACT_ID to the guard contract account id printed by `npm run deploy:guard`.",
+    );
+  }
+
+  return { ...base, guardContractId, scopedPrivateKey };
+}
+
+/** Load `.env` (if present) and return validated executor config, failing cleanly otherwise. */
+export function loadExecutorConfig(): ExecutorConfig {
+  loadDotEnv();
+  return parseExecutorConfig(process.env);
+}

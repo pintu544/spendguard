@@ -10,12 +10,16 @@
     "spike:rpc": "tsx src/spike/rpc-probe.ts",
     "spike:transfer": "tsx src/spike/transfer.ts",
     "spike:access-key": "tsx src/spike/access-key.ts",
+    "demo": "tsx src/agent.ts",
+    "demo:dry": "tsx src/agent.ts --dry-run",
+    "deploy:guard": "tsx scripts/deploy-guard.ts",
+    "report": "tsx src/report.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "dependencies": {
     "near-api-js": "^7.4.0",
     "undici": "^8.12.3"
