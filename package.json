@@ -1,0 +1,30 @@
+{
+  "name": "spendguard",
+  "version": "1.0.0",
+  "description": "SpendGuard — deterministic policy firewall between an AI agent and its NEAR wallet (NEAR Hackathon: Build Beyond Boundaries). Testnet only.",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "spike:rpc": "tsx src/spike/rpc-probe.ts",
+    "spike:transfer": "tsx src/spike/transfer.ts",
+    "spike:access-key": "tsx src/spike/access-key.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "near-api-js": "^7.4.0",
+    "undici": "^8.12.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  },
+  "private": true,
+  "type": "module"
+}
