@@ -6,6 +6,7 @@
     "test": "test"
   },
   "scripts": {
+    "spike:keygen": "node scripts/keygen.mjs",
     "spike:rpc": "tsx src/spike/rpc-probe.ts",
     "spike:transfer": "tsx src/spike/transfer.ts",
     "spike:access-key": "tsx src/spike/access-key.ts",
