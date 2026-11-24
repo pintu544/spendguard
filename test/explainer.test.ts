@@ -40,6 +40,16 @@ describe("TemplateExplainer", () => {
     expect(r0).toContain("malformed");
   });
 
+  it("falls back to a generic sentence for an unknown rule id (F6)", () => {
+    const v = evaluateProposal(policy, { recipient: "api-vendor.testnet", amountNear: "0.25" }, 0n);
+    const future = { ...v, ruleId: "R9_FUTURE_RULE" } as unknown as typeof v;
+    const s = explainer.explain(future);
+    expect(typeof s).toBe("string");
+    expect(s.length).toBeGreaterThan(0);
+    expect(s).toContain("R9_FUTURE_RULE");
+    expect(s).toContain(v.reason);
+  });
+
   it("is deterministic: the same verdict yields the same sentence", () => {
     const v = evaluateProposal(policy, { recipient: "api-vendor.testnet", amountNear: "0.25" }, 0n);
     expect(explainVerdict(v)).toBe(explainer.explain(v));

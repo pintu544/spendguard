@@ -9,6 +9,7 @@ import {
   appendVerdictLog,
   readVerdictLog,
   spentTodayYocto,
+  withLock,
   type VerdictLogEntry,
 } from "./log.js";
 import { setupProxyFromEnv } from "./net.js";
@@ -91,7 +92,6 @@ async function main(): Promise<void> {
 
   const logPath =
     (process.env.SPENDGUARD_LOG_PATH ?? "").trim() || resolve(process.cwd(), "logs/verdicts.jsonl");
-  const entries = readVerdictLog(logPath);
   const explainer = new TemplateExplainer();
 
   for (const scenario of buildScenarios(policy)) {
@@ -99,56 +99,60 @@ async function main(): Promise<void> {
     console.log(`[${scenario.id}] ${scenario.title}`);
     console.log(`  Agent proposes: pay ${amountNear} NEAR to ${scenario.recipient}`);
 
-    const spent = spentTodayYocto(entries, new Date());
-    const verdict: Verdict = evaluateProposal(
-      policy,
-      { recipient: scenario.recipient, amountNear },
-      spent,
-    );
-    const explanation = explainer.explain(verdict);
-    console.log(`  Verdict: ${verdict.decision} (rule ${verdict.ruleId})`);
-    console.log(`  ${explanation}`);
+    // Lock the read-evaluate-execute-append cycle so concurrent agents cannot
+    // both read spentToday = 0 and both decide to execute within the daily cap.
+    await withLock(`${logPath}.lock`, async () => {
+      const freshEntries = readVerdictLog(logPath);
+      const spent = spentTodayYocto(freshEntries, new Date());
+      const verdict: Verdict = evaluateProposal(
+        policy,
+        { recipient: scenario.recipient, amountNear },
+        spent,
+      );
+      const explanation = explainer.explain(verdict);
+      console.log(`  Verdict: ${verdict.decision} (rule ${verdict.ruleId})`);
+      console.log(`  ${explanation}`);
 
-    let executed = false;
-    let txHash: string | undefined;
-    let explorerUrl: string | undefined;
-    if (verdict.decision === "ALLOW") {
-      const outcome = await executor.execute(verdict, {
-        recipient: scenario.recipient,
-        amountYocto: scenario.amountYocto,
-      });
-      if (outcome.status === "executed") {
-        executed = true;
-        txHash = outcome.txHash;
-        explorerUrl = outcome.explorerUrl;
-        console.log(`  Executed on testnet — tx hash: ${txHash}`);
-        console.log(`  Explorer: ${explorerUrl}`);
+      let executed = false;
+      let txHash: string | undefined;
+      let explorerUrl: string | undefined;
+      if (verdict.decision === "ALLOW") {
+        const outcome = await executor.execute(verdict, {
+          recipient: scenario.recipient,
+          amountYocto: scenario.amountYocto,
+        });
+        if (outcome.status === "executed") {
+          executed = true;
+          txHash = outcome.txHash;
+          explorerUrl = outcome.explorerUrl;
+          console.log(`  Executed on testnet — tx hash: ${txHash}`);
+          console.log(`  Explorer: ${explorerUrl}`);
+        } else {
+          console.log("  Dry run — this payment would execute live; nothing was signed.");
+        }
       } else {
-        console.log("  Dry run — this payment would execute live; nothing was signed.");
+        console.log("  Nothing signed.");
       }
-    } else {
-      console.log("  Nothing signed.");
-    }
 
-    const entry: VerdictLogEntry = {
-      ts: new Date().toISOString(),
-      scenario: scenario.id,
-      proposal: {
-        recipient: scenario.recipient,
-        amountNear,
-        amountYocto: scenario.amountYocto.toString(),
-      },
-      decision: verdict.decision,
-      ruleId: verdict.ruleId,
-      reason: verdict.reason,
-      explanation,
-      executed,
-      dryRun,
-      ...(txHash ? { txHash } : {}),
-      ...(explorerUrl ? { explorerUrl } : {}),
-    };
-    entries.push(entry);
-    appendVerdictLog(logPath, entry);
+      const entry: VerdictLogEntry = {
+        ts: new Date().toISOString(),
+        scenario: scenario.id,
+        proposal: {
+          recipient: scenario.recipient,
+          amountNear,
+          amountYocto: scenario.amountYocto.toString(),
+        },
+        decision: verdict.decision,
+        ruleId: verdict.ruleId,
+        reason: verdict.reason,
+        explanation,
+        executed,
+        dryRun,
+        ...(txHash ? { txHash } : {}),
+        ...(explorerUrl ? { explorerUrl } : {}),
+      };
+      appendVerdictLog(logPath, entry);
+    });
     console.log("");
   }
 

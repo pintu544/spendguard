@@ -73,6 +73,11 @@ export function parsePolicy(raw: unknown): Policy {
 
   const perTxCapYocto = amountField(obj, "perTxCap");
   const dailyCapYocto = amountField(obj, "dailyCap");
+  if (perTxCapYocto > dailyCapYocto) {
+    throw new PolicyValidationError(
+      `"perTxCap" must not exceed "dailyCap" (a per-transaction cap larger than the daily cap makes the daily cap unreachable), got perTxCap "${String(obj.perTxCap)}" vs dailyCap "${String(obj.dailyCap)}".`,
+    );
+  }
   const largePaymentThresholdYocto = amountField(obj, "largePaymentThreshold");
   if (largePaymentThresholdYocto >= perTxCapYocto) {
     throw new PolicyValidationError(
@@ -89,6 +94,11 @@ export function parsePolicy(raw: unknown): Policy {
     if (typeof entry !== "string" || !ACCOUNT_ID_RE.test(entry)) {
       throw new PolicyValidationError(
         `"allowlist" entry ${JSON.stringify(entry)} is not a NEAR account id.`,
+      );
+    }
+    if (entry.length < 2 || entry.length > 64) {
+      throw new PolicyValidationError(
+        `"allowlist" entry ${JSON.stringify(entry)} has length ${entry.length}; NEAR account ids must be 2–64 characters.`,
       );
     }
     if (allowlist.includes(entry)) {

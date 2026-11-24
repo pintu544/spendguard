@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import type { Decision, RuleId } from "./engine.js";
 
@@ -45,17 +45,35 @@ export function appendVerdictLog(path: string, entry: VerdictLogEntry): void {
   appendFileSync(path, `${JSON.stringify(entry)}\n`, "utf8");
 }
 
+function hasRequiredShape(parsed: unknown): parsed is VerdictLogEntry {
+  if (typeof parsed !== "object" || parsed === null) return false;
+  const e = parsed as Record<string, unknown>;
+  if (typeof e.ts !== "string" || !e.ts) return false;
+  if (typeof e.decision !== "string" || !e.decision) return false;
+  const p = e.proposal;
+  if (typeof p !== "object" || p === null) return false;
+  const amountYocto = (p as Record<string, unknown>).amountYocto;
+  if (typeof amountYocto !== "string" || !amountYocto) return false;
+  return true;
+}
+
 export function readVerdictLog(path: string): VerdictLogEntry[] {
   if (!existsSync(path)) return [];
   const lines = readFileSync(path, "utf8").split("\n");
   const entries: VerdictLogEntry[] = [];
   lines.forEach((line, idx) => {
     if (!line.trim()) return;
+    let parsed: unknown;
     try {
-      entries.push(JSON.parse(line) as VerdictLogEntry);
+      parsed = JSON.parse(line);
     } catch {
       throw new Error(`Verdict log ${path} line ${idx + 1} is not valid JSON — refusing to guess.`);
     }
+    if (!hasRequiredShape(parsed)) {
+      console.warn(`Verdict log ${path} line ${idx + 1}: missing required fields (ts, decision, proposal.amountYocto) — skipped.`);
+      return;
+    }
+    entries.push(parsed);
   });
   return entries;
 }
@@ -70,9 +88,38 @@ export function spentTodayYocto(entries: VerdictLogEntry[], now: Date): bigint {
   const today = dayKey(now.toISOString());
   let total = 0n;
   for (const entry of entries) {
-    if (entry.decision === "ALLOW" && dayKey(entry.ts) === today) {
+    if (entry.decision === "ALLOW" && entry.executed === true && dayKey(entry.ts) === today) {
       total += BigInt(entry.proposal.amountYocto);
     }
   }
   return total;
+}
+
+/**
+ * Acquire an exclusive advisory lock at `lockPath`, run `fn`, then release.
+ * Uses O_CREAT|O_EXCL (atomic on POSIX) with 50 ms retry up to `timeoutMs`.
+ */
+export async function withLock<T>(
+  lockPath: string,
+  fn: () => Promise<T>,
+  timeoutMs: number = 5000,
+): Promise<T> {
+  const deadline = Date.now() + timeoutMs;
+  while (true) {
+    try {
+      writeFileSync(lockPath, "", { flag: "wx" });
+      break;
+    } catch (err: unknown) {
+      if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
+      if (Date.now() >= deadline) {
+        throw new Error(`Could not acquire lock ${lockPath} within ${timeoutMs} ms — another process may be stuck.`);
+      }
+      await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    }
+  }
+  try {
+    return await fn();
+  } finally {
+    try { unlinkSync(lockPath); } catch { /* best-effort release */ }
+  }
 }

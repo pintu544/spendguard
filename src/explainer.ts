@@ -39,6 +39,8 @@ export class TemplateExplainer implements Explainer {
         return `Escalated: ${amount} to ${recipient} is above your large-payment threshold of ${threshold} NEAR — held for your approval, nothing was signed.`;
       case "R0_MALFORMED":
         return `Denied: the proposal was malformed (${verdict.reason}) — nothing was signed.`;
+      default:
+        return `Verdict: ${verdict.decision} (rule ${verdict.ruleId}) — ${verdict.reason}`;
     }
   }
 }

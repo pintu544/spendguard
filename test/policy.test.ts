@@ -82,6 +82,31 @@ describe("parsePolicy — validation failures refuse to start, naming the field"
     ).toThrowError(/twice/);
   });
 
+  it("rejects a perTxCap larger than the dailyCap (F3)", () => {
+    expect(() => parsePolicy({ ...valid, perTxCap: "3", dailyCap: "2" })).toThrowError(
+      /must not exceed "dailyCap"/,
+    );
+  });
+
+  it("accepts a perTxCap equal to the dailyCap (F3 boundary)", () => {
+    const p = parsePolicy({ ...valid, perTxCap: "2", dailyCap: "2" });
+    expect(p.perTxCapYocto).toBe(p.dailyCapYocto);
+  });
+
+  it("rejects an allowlist entry shorter than 2 characters (F7)", () => {
+    expect(() => parsePolicy({ ...valid, allowlist: ["a"] })).toThrowError(/2–64 characters/);
+  });
+
+  it("rejects an allowlist entry longer than 64 characters (F7)", () => {
+    expect(() => parsePolicy({ ...valid, allowlist: ["a".repeat(65)] })).toThrowError(/2–64 characters/);
+  });
+
+  it("accepts an allowlist entry at the 64 character boundary (F7)", () => {
+    const longest = "a".repeat(64);
+    const p = parsePolicy({ ...valid, allowlist: [longest] });
+    expect(p.allowlist).toEqual([longest]);
+  });
+
   it("loadPolicy names a missing file exactly", () => {
     expect(() => loadPolicy(resolve(process.cwd(), "policy.does-not-exist.json"))).toThrowError(
       /policy file not found/,

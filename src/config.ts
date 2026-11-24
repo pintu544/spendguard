@@ -53,6 +53,9 @@ export function loadDotEnv(envPath: string = resolve(process.cwd(), ".env")): bo
  * Pure and offline-testable: pass any env object, get config or a
  * CredentialsNotConfiguredError / Error with a precise message.
  */
+// Same account-id shape the guard contract and policy loader validate.
+const ACCOUNT_ID_RE = /^(([a-z\d]+[-_])*[a-z\d]+\.)*([a-z\d]+[-_])*[a-z\d]+$/;
+
 export function parseConfig(env: NodeJS.ProcessEnv): SpendGuardConfig {
   const missing: string[] = [];
   const accountId = (env.NEAR_ACCOUNT_ID ?? "").trim();
@@ -60,6 +63,12 @@ export function parseConfig(env: NodeJS.ProcessEnv): SpendGuardConfig {
   if (!accountId) missing.push("NEAR_ACCOUNT_ID");
   if (!privateKey) missing.push("NEAR_PRIVATE_KEY");
   if (missing.length > 0) throw new CredentialsNotConfiguredError(missing);
+
+  if (accountId.length < 2 || accountId.length > 64 || !ACCOUNT_ID_RE.test(accountId)) {
+    throw new Error(
+      `NEAR_ACCOUNT_ID "${accountId}" is not a valid NEAR account id (must be 2–64 characters, lowercase alphanumeric, hyphens, underscores, and dots). Refusing to continue.`,
+    );
+  }
 
   if (!privateKey.startsWith("ed25519:")) {
     throw new Error(

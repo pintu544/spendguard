@@ -64,4 +64,32 @@ describe("parseConfig", () => {
     });
     expect(cfg.rpcUrl).toBe("https://rpc.example.test");
   });
+
+  it("rejects a NEAR_ACCOUNT_ID that is too short (F4)", () => {
+    expect(() => parseConfig({ ...base, NEAR_ACCOUNT_ID: "a" })).toThrowError(/not a valid NEAR account id/);
+  });
+
+  it("rejects a NEAR_ACCOUNT_ID that is too long (F4)", () => {
+    expect(() => parseConfig({ ...base, NEAR_ACCOUNT_ID: "a".repeat(65) })).toThrowError(
+      /not a valid NEAR account id/,
+    );
+  });
+
+  it("rejects a NEAR_ACCOUNT_ID with uppercase letters (F4)", () => {
+    expect(() => parseConfig({ ...base, NEAR_ACCOUNT_ID: "Alice.testnet" })).toThrowError(
+      /not a valid NEAR account id/,
+    );
+  });
+
+  it("rejects a NEAR_ACCOUNT_ID with characters outside the NEAR grammar (F4)", () => {
+    expect(() => parseConfig({ ...base, NEAR_ACCOUNT_ID: "alice!.testnet" })).toThrowError(
+      /not a valid NEAR account id/,
+    );
+  });
+
+  it("accepts NEAR_ACCOUNT_IDs at the 2 and 64 character boundaries (F4)", () => {
+    expect(parseConfig({ ...base, NEAR_ACCOUNT_ID: "ab" }).accountId).toBe("ab");
+    const longest = "a".repeat(64);
+    expect(parseConfig({ ...base, NEAR_ACCOUNT_ID: longest }).accountId).toBe(longest);
+  });
 });
